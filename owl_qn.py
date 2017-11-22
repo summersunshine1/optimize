@@ -150,156 +150,6 @@ def owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
             hk = r*g.I
         k+=1
     return w   
-    
-def owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
-    delta = 0.3
-    be = 0.4
-    epsilo = 1e-4
-    n = np.shape(trainx)[1]
-    # a = np.random.randint(1,10, size=n)
-   
-    k = 0
-    m = 5
-    s = []
-    y = []
-    # g = gpfun(gfun,trainx,trainy,w)
-    # d = -h*g
-    hk = np.eye(n)
-    h = np.eye(n)
-    while k<maxiter:
-        # g = gfun(trainx,trainy,w)
-        g = gpfun(gfun,trainx,trainy,w)
-        t = np.linalg.norm(g)
-        print(t)
-        if t<=epsilo:
-            print("last"+str(t))
-            return w
-        d = -hk*g
-        d = fix_sign(d,-g)
-        # print(d)
-        z = 0
-        while z<20:
-            new_w = w+be**z*d
-            orth = get_orthant(w,g)
-            new_w = fix_sign(new_w,orth)
-            
-            temp1 = func(trainy,trainx,new_w)
-            temp2 = func(trainy,trainx,w)-delta*g.T*(new_w-w)
-            # print(str(temp1)+":"+str(temp2))
-            if temp1<=temp2:
-                break
-            z+=1 
-        print(z)
-        sk = new_w - w
-        w = np.copy(new_w)
-        # print(w)
-        if len(s)>m:
-            s.pop(0)
-            y.pop(0)
-
-        qk = gfun(trainx,trainy,w)
-        gk = gfun(trainx,trainy,w)
-        yk = qk-g
-          
-        s.append(sk)
-        y.append(yk)
-        t = len(s)
-        i = t-2
-        a = []
-        while i>=0:
-            alpha = s[i].T*qk/(y[i].T*s[i])
-            a.append(alpha)
-            qk = qk-y[i]*alpha
-            i-=1
-        # if t>=2:
-            # temp = s[t-1].T*y[t-1]/(y[t-1].T*y[t-1])
-            # temp = list(temp.A1)
-            # h = np.diag(temp*n)
-        h = y[0]*s[0].T/(y[0].T*y[0])
-        r = h*qk
-        for i in range(t-1):
-            beta = y[i].T*r/(y[i].T*s[i])
-            r = r+s[i]*(a[t-2-i]-beta)
-        
-        if yk.T*sk>0:
-            hk = r*g.I
-        k+=1
-    return w   
-    
-def owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
-    delta = 0.3
-    be = 0.4
-    epsilo = 1e-4
-    n = np.shape(trainx)[1]
-    # a = np.random.randint(1,10, size=n)
-   
-    k = 0
-    m = 5
-    s = []
-    y = []
-    # g = gpfun(gfun,trainx,trainy,w)
-    # d = -h*g
-    hk = np.eye(n)
-    h = np.eye(n)
-    while k<maxiter:
-        # g = gfun(trainx,trainy,w)
-        g = gpfun(gfun,trainx,trainy,w)
-        t = np.linalg.norm(g)
-        print(t)
-        if t<=epsilo:
-            print("last"+str(t))
-            return w
-        d = -hk*g
-        d = fix_sign(d,-g)
-        # print(d)
-        z = 0
-        while z<20:
-            new_w = w+be**z*d
-            orth = get_orthant(w,g)
-            new_w = fix_sign(new_w,orth)
-            
-            temp1 = func(trainy,trainx,new_w)
-            temp2 = func(trainy,trainx,w)-delta*g.T*(new_w-w)
-            # print(str(temp1)+":"+str(temp2))
-            if temp1<=temp2:
-                break
-            z+=1 
-        print(z)
-        sk = new_w - w
-        w = np.copy(new_w)
-        # print(w)
-        if len(s)>m:
-            s.pop(0)
-            y.pop(0)
-
-        qk = gfun(trainx,trainy,w)
-        gk = gfun(trainx,trainy,w)
-        yk = qk-g
-          
-        s.append(sk)
-        y.append(yk)
-        t = len(s)
-        i = t-2
-        a = []
-        while i>=0:
-            alpha = s[i].T*qk/(y[i].T*s[i])
-            a.append(alpha)
-            qk = qk-y[i]*alpha
-            i-=1
-        # if t>=2:
-            # temp = s[t-1].T*y[t-1]/(y[t-1].T*y[t-1])
-            # temp = list(temp.A1)
-            # h = np.diag(temp*n)
-        h = y[0]*s[0].T/(y[0].T*y[0])
-        r = h*qk
-        for i in range(t-1):
-            beta = y[i].T*r/(y[i].T*s[i])
-            r = r+s[i]*(a[t-2-i]-beta)
-        
-        if yk.T*sk>0:
-            hk = r*g.I
-        k+=1
-    return w  
 
 def online_owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
     delta = 0.3
@@ -322,17 +172,20 @@ def online_owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
     t0 =np.power(10,4)
     samples = np.shape(trainx)[0]
     print(samples)
+    t = 10000
     while k<maxiter:
         # g = gfun(trainx,trainy,w)
         indexs = list(range(samples))
         np.random.shuffle(indexs)
         lasti=0
+        print(t)
         for i in range(len(indexs)):
-            if i%1000!=0 or i==0:
-                continue
-            g = gpfun(gfun,trainx[lasti:i,:],trainy[lasti:i,:],w)
+            # if i%1000!=0 or i==0:
+                # continue
+            # g = gpfun(gfun,trainx[lasti:i,:],trainy[lasti:i,:],w)
+            g = gpfun(gfun,trainx[i,:],trainy[i,:],w)
             t = np.linalg.norm(g)
-            print(t)
+            # print(t)
             if t<=epsilo:
                 print("last"+str(t))
                 return w
@@ -349,29 +202,31 @@ def online_owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
                 s.pop(0)
                 y.pop(0)
 
-            qk = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
-            gk = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
+            # qk = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
+            # gk = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
+            qk = gfun(trainx[i,:],trainy[i,:],w)
+            gk = gfun(trainx[i,:],trainy[i,:],w)
             yk = qk-g+lamda*sk
             lasti = i  
             s.append(sk)
             y.append(yk)
             t = len(s)
-            i = t-2
+            p = t-2
             a = []
-            while i>=0:
-                alpha = c*s[i].T*qk/(y[i].T*s[i])
+            while p>=0:
+                alpha = c*s[p].T*qk/(y[p].T*s[p])
                 a.append(alpha)
-                qk = qk-y[i]*alpha
-                i-=1
+                qk = qk-y[p]*alpha
+                p-=1
             # if t>=2:
                 # temp = s[t-1].T*y[t-1]/(y[t-1].T*y[t-1])
                 # temp = list(temp.A1)
                 # h = np.diag(temp*n)
             # h = y[0]*s[0].T/(y[0].T*y[0])
             r = h*qk
-            for i in range(t-1):
-                beta = y[i].T*r/(y[i].T*s[i])
-                r = r+s[i]*(a[t-2-i]-beta)
+            for p in range(t-1):
+                beta = y[p].T*r/(y[p].T*s[p])
+                r = r+s[p]*(a[t-2-p]-beta)
             
             if yk.T*sk>0:
                 hk = r*g.I
