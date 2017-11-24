@@ -2,6 +2,7 @@ import numpy as np
 from getPath import *
 pardir = getparentdir()
 from commonLib import *
+from adadelta import *
 
 train_path = pardir+'/data/train'
 test_path = pardir+'/data/test'
@@ -40,25 +41,18 @@ def get_pesudo_gradient(gfunc,x,y,w,lamda=1,isl1=1):
     
 def get_orthant(w,psudo_g):
     orthant = np.copy(w)
-    # print(orthant)
-    # print(psudo_g)
     nozeroindex = (orthant!=0)
     zeroindex = (orthant==0)
     nozerosign = np.sign(orthant[nozeroindex])
     if len(nozerosign)>0:
-        
         orthant[nozeroindex]=nozerosign
-    # print(np.sign(-psudo_g[zeroindex]))
-    # print(orthant[zeroindex])
     zerosign = np.sign(-psudo_g[zeroindex])
     if len(zerosign)>0:
         orthant[zeroindex]=zerosign.A1
     return orthant
-    
 
 def fix_sign(g,sign):
     res = np.multiply(g,sign)
-    # print(res)
     g[res<=0]=0
     return g
 
@@ -81,19 +75,16 @@ def owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
     be = 0.4
     epsilo = 1e-4
     n = np.shape(trainx)[1]
-    # a = np.random.randint(1,10, size=n)
    
     k = 0
     m = 5
     s = []
     y = []
-    # g = gpfun(gfun,trainx,trainy,w)
-    # d = -h*g
     hk = np.eye(n)
     h = np.eye(n)
     while k<maxiter:
-        # g = gfun(trainx,trainy,w)
         g = gpfun(gfun,trainx,trainy,w)
+        gk = gfun(trainx,trainy,w)
         t = np.linalg.norm(g)
         print(t)
         if t<=epsilo:
@@ -101,7 +92,8 @@ def owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
             return w
         d = -hk*g
         d = fix_sign(d,-g)
-        # print(d)
+
+        #line search 
         z = 0
         while z<20:
             new_w = w+be**z*d
@@ -110,21 +102,18 @@ def owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
             
             temp1 = func(trainy,trainx,new_w)
             temp2 = func(trainy,trainx,w)-delta*g.T*(new_w-w)
-            # print(str(temp1)+":"+str(temp2))
             if temp1<=temp2:
                 break
             z+=1 
-        print(z)
         w = np.copy(new_w)
-        # print(w)
         if len(s)>m:
             s.pop(0)
             y.pop(0)
             
         sk = new_w - w
         qk = gfun(trainx,trainy,w)
-        gk = gfun(trainx,trainy,w)
-        yk = qk-g
+
+        yk = qk-gk
           
         s.append(sk)
         y.append(yk)
@@ -140,7 +129,7 @@ def owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
             # temp = s[t-1].T*y[t-1]/(y[t-1].T*y[t-1])
             # temp = list(temp.A1)
             # h = np.diag(temp*n)
-        h = y[0]*s[0].T/(y[0].T*y[0])
+        # h = y[0]*s[0].T/(y[0].T*y[0])
         r = h*qk
         for i in range(t-1):
             beta = y[i].T*r/(y[i].T*s[i])
@@ -152,61 +141,49 @@ def owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
     return w   
 
 def online_owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
-    delta = 0.3
-    be = 0.4
     epsilo = 1e-4
     n = np.shape(trainx)[1]
-    # a = np.random.randint(1,10, size=n)
-    c = 0.01
+
+    c = 1
     k = 0
     m = 10
     s = []
     y = []
-    # g = gpfun(gfun,trainx,trainy,w)
-    # d = -h*g
     hk = np.eye(n)
     h = np.eye(n)
+    batch_size = 1
     
     lamda = 0.1
-    lr = 0.1
+    lr = 0.001
     t0 =np.power(10,4)
     samples = np.shape(trainx)[0]
-    print(samples)
-    t = 10000
-    while k<maxiter:
-        # g = gfun(trainx,trainy,w)
+    ada = Adam(n)
+    while k<5:
+        print("current iter:" +str(k))
         indexs = list(range(samples))
         np.random.shuffle(indexs)
         lasti=0
-        print(t)
         for i in range(len(indexs)):
-            # if i%1000!=0 or i==0:
-                # continue
-            # g = gpfun(gfun,trainx[lasti:i,:],trainy[lasti:i,:],w)
-            g = gpfun(gfun,trainx[i,:],trainy[i,:],w)
-            t = np.linalg.norm(g)
-            # print(t)
-            if t<=epsilo:
-                print("last"+str(t))
-                return w
-            d = -hk*g
+            if i%batch_size!=0 or i==0:
+                continue
+            g = gpfun(gfun,trainx[lasti:i,:],trainy[lasti:i,:],w)
+            gk = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
+            d = -hk*gk
+            templr = ada.getgrad(d,k+1)
             d = fix_sign(d,-g)
-            # print(d)
-            new_w = w+(lr*t0/(t0+k))*d
+
+            # new_w = w+(lr*t0/(t0+k))*d
+            new_w = w+templr
             orth = get_orthant(w,g)
             new_w = fix_sign(new_w,orth)
-            sk = (new_w - w)/c
+            sk = (new_w - w)
             w = np.copy(new_w)
-            # print(w)
             if len(s)>m:
                 s.pop(0)
                 y.pop(0)
 
-            # qk = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
-            # gk = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
-            qk = gfun(trainx[i,:],trainy[i,:],w)
-            gk = gfun(trainx[i,:],trainy[i,:],w)
-            yk = qk-g+lamda*sk
+            qk = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
+            yk = qk-gk+lamda*sk
             lasti = i  
             s.append(sk)
             y.append(yk)
@@ -214,7 +191,7 @@ def online_owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
             p = t-2
             a = []
             while p>=0:
-                alpha = c*s[p].T*qk/(y[p].T*s[p])
+                alpha = s[p].T*qk/(y[p].T*s[p])
                 a.append(alpha)
                 qk = qk-y[p]*alpha
                 p-=1
@@ -227,9 +204,13 @@ def online_owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
             for p in range(t-1):
                 beta = y[p].T*r/(y[p].T*s[p])
                 r = r+s[p]*(a[t-2-p]-beta)
-            
             if yk.T*sk>0:
                 hk = r*g.I
+                
+            if i/batch_size%1000 == 0:
+                g = gpfun(gfun,trainx,trainy,w)
+                grad = np.linalg.norm(g)
+                print(grad)
         k+=1
     return w     
 
@@ -268,7 +249,6 @@ def train():
     train,label,w = initdata(train_path)
     maxiter = 100
     w = online_owl_qn(computeloss,compute_regular_gradients,get_pesudo_gradient,hessian,w,maxiter,train,label)
-    # print(w)
     test(w)
     
 if __name__=="__main__":
