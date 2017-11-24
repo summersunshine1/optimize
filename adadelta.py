@@ -1,21 +1,43 @@
 import numpy as np
+from sklearn import linear_model
+from sklearn import datasets
+from sklearn.model_selection import train_test_split
 
 class AdaDelta:
-    def __init__(self,gfunc):
-        self.p = 0.95
-        self.e=1e-6
-        self.gfunc = gfunc
-        self.g = [0]
-        self.s = [0]
+    def __init__(self,features,samples = 1):
+        self.p = 0.96
+        self.e=1e-10
+        m = np.matrix([[0]]*features)
+        self.lastg= m
+        self.lasts =m
+        self.samples = samples
         
         
-    def adadelta(iter,grad):
-        temp = (1-p)*np.square(grad)+p*self.g[-1]
-        self.g.append(temp)
-        delta = -np.sqrt(s[-1]+self.e)/np.sqrt(temp+self.e)*grad
-        t = (1-p)*np.square(delta)+p*self.s[-1]
-        self.s.append(t)
+    def getgrad(self,grad,iter):
+        gradc = grad#/self.samples
+        self.lastg = np.multiply(1-self.p,np.square(gradc))+np.multiply(self.p,self.lastg)
+        delta = np.multiply(np.sqrt(self.lasts+self.e)/np.sqrt(self.lastg+self.e),gradc)
+        self.lasts = np.multiply((1-self.p),np.square(delta))+np.multiply(self.p,self.lasts)
         return delta
         
+class Adam:
+    def __init__(self,features,alpha = 0.001,beta1 = 0.9,beta2 = 0.999,epsilo = 1e-8):
+        self.alpha = 0.001
+        self.beta1 = beta1
+        self.beta2 = beta2
+        self.e = epsilo
+        self.m = np.matrix([[0]]*features)
+        self.v = np.matrix([[0]]*features)
+    
+    def getgrad(self,grad,iter):
+        self.m = self.beta1*self.m+(1-self.beta1)*grad
+        self.v = self.beta2*self.v+(1-self.beta2)*np.square(grad)
+        mhat = self.m/(1-np.power(self.beta1,iter))
+        vhat = self.v/(1-np.power(self.beta2,iter))
+        delta = self.alpha*mhat/(np.sqrt(vhat)+self.e)
+        return delta
+        
+    
+
     
     
