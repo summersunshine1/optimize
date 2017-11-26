@@ -2,6 +2,8 @@ import numpy as np
 import random
 from sklearn import datasets
 import matplotlib.pylab as plt
+from kmeans_init import *
+from adadelta import *
 
 def initialize(x,k):
     samples = np.shape(x)[0]
@@ -17,7 +19,9 @@ def dis(w,x):
     return np.square(w-x)
     
 def kmeans(x,k):
-    w = initialize(x,k)
+    # w = initialize(x,k)
+    w = kmeans_plus(x,k)
+    # w = kmeans_plus_improve(x,k)
     samples = np.shape(x)[0]
     features = np.shape(x)[1]
     clusters = np.array([-1]*samples)
@@ -26,6 +30,7 @@ def kmeans(x,k):
     while True:
         print("current iter"+str(iters))
         lastclusters = np.copy(clusters)
+        lastw = np.copy(w)
         for i in range(samples):
             dist = dis(w,x[i,:])
             tempk = np.argmin(np.sum(dist,1))
@@ -34,34 +39,51 @@ def kmeans(x,k):
             indexs = np.array(range(samples))
             kindexs = indexs[clusters==i]
             w[i,:] = np.mean(x[kindexs,:],0)
-        if np.array_equal(clusters,lastclusters):
+        wchange = np.linalg.norm(w-lastw)/k
+        print(wchange)
+        if wchange<1e-3:
             break
         iters+=1   
     return w,clusters
     
 def sgd_kmeans(x,k):
-    w = initialize(x,k)
-    maxiter = 1000
+    # w = initialize(x,k)
+    # w = kmeans_plus(x,k)
+    w = kmeans_plus_improve(x,k)
+    maxiter = 10
     samples = np.shape(x)[0]
-    clusternum = np.array([0]*k)
+    features = np.shape(x)[1]
+
     clusters = np.array([-1]*samples)
+    
+    ada = Adam(k,features)
     print("sgd kmeans begin train.......")
     for iter in range(maxiter):
         print("current iter"+str(iter))
         indexs = list(range(samples))
         np.random.shuffle(indexs)
-        lastclusters = np.copy(clusters)
+        lastw = np.copy(w)
+        clusternum = np.array([0]*k)
         for i in indexs:
             tempk = np.argmin(np.sum(dis(w,x[i,:]),1)) #get cluster nearest 
             clusternum[tempk]+=1 #nk=nk+1
-            w[tempk,:]+=1/(clusternum[tempk])*(x[i,]-w[tempk,:])#w = w+1/n*(xi-wk)
-        if np.array_equal(clusters,lastclusters):
+            # w[tempk,:]+=1/(clusternum[tempk])*(x[i,]-w[tempk,:])#w = w+1/n*(xi-wk)
+            grad = np.zeros((k,features))
+            temp = 1/(clusternum[tempk])*(x[i,:]-w[tempk,:])
+            grad[tempk,:] = temp
+            w = w+ada.getmaxgrad(grad,iter+1)
+        wchange = np.linalg.norm(w-lastw)/k
+        print(wchange)
+        if wchange<1e-2:
             break
     for i in range(samples):
         dist = dis(w,x[i,:])
         tempk = np.argmin(np.sum(dist,1))
         clusters[i] = tempk        
     return w,clusters
+    
+# def sgd_kmeans_with_fake_label(x,k):
+    
     
 def kmeans_train():
     iris = datasets.load_iris()

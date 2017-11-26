@@ -21,22 +21,28 @@ class AdaDelta:
         return delta
         
 class Adam:
-    def __init__(self,features,alpha = 0.001,beta1 = 0.9,beta2 = 0.999,epsilo = 1e-8):
-        self.alpha = 0.001
+    def __init__(self,paramnum,perparamnum = 1,alpha = 0.001,beta1 = 0.9,beta2 = 0.999,epsilo = 1e-8):
+        self.alpha = alpha
         self.beta1 = beta1
         self.beta2 = beta2
         self.e = epsilo
-        self.m = np.matrix([[0]]*features)
-        self.v = np.matrix([[0]]*features)
+        self.m = np.matrix([[0]*perparamnum]*paramnum)
+        self.v = np.matrix([[0]*perparamnum]*paramnum)
     
     def getgrad(self,grad,iter):
         self.m = self.beta1*self.m+(1-self.beta1)*grad
         self.v = self.beta2*self.v+(1-self.beta2)*np.square(grad)
         mhat = self.m/(1-np.power(self.beta1,iter))
         vhat = self.v/(1-np.power(self.beta2,iter))
-        delta = self.alpha*mhat/(np.sqrt(vhat)+self.e)
+        tempa = self.alpha#/(np.sqrt(iter)
+        delta = tempa*mhat/(np.sqrt(vhat)+self.e)
         return delta
         
+    def getmaxgrad(self,grad,iter):#adamax
+        self.m = self.beta1*self.m+(1-self.beta1)*grad
+        self.v = np.maximum(self.beta2*self.v,np.abs(grad))
+        delta = self.alpha/(1-np.power(self.beta1,iter))*self.m/(self.v+self.e)
+        return delta
     
 
     
