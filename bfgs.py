@@ -8,6 +8,7 @@ from commonLib import *
 from adadelta import *
 from sklearn.datasets import make_classification
 import time
+from bfgs import *
 
 train_path = pardir+'/data/train'
 test_path = pardir+'/data/test'
@@ -181,6 +182,7 @@ def onlinebfgs(func,gfun,hess,w,maxiter,trainx,trainy):
     t=1000
     ada = Adam(n)
     count = 0
+    showsize = int(samples/10)
     while k<maxiter:
         indexs = list(range(samples))
         np.random.shuffle(indexs)
@@ -194,6 +196,7 @@ def onlinebfgs(func,gfun,hess,w,maxiter,trainx,trainy):
             tempg = ada.getgrad(d,k+1)
             # w = w+t0/(t0+k)*lr/c*d
             # s = t0/(t0+k)*lr/c*d
+            lastw = np.copy(w)
             w = w+tempg/c
             s = tempg/c
             y = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)-g+lamda*s
@@ -207,26 +210,30 @@ def onlinebfgs(func,gfun,hess,w,maxiter,trainx,trainy):
             else:
                 print('less')
             lasti=i
-            if i/batch_size%1000 == 0:
-                g = gfun(trainx,trainy,w)
-                t = np.linalg.norm(g)
+            if i/batch_size%showsize == 0:
+                # g = gfun(trainx,trainy,w)
+                # t = np.linalg.norm(g)
+                # print(t)
+                # if t<0.02:
+                    # return w
+                tempdis = lastw-w
+                t = np.linalg.norm(tempdis)
                 print(t)
-                if t<0.02:
+                if t<1e-5:
                     return w
         k+=1
     return w
     
 def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
-    epsilo = 1e-4
-    n = np.shape(trainx)[1]
+    epsilo = 1e-8
+    # n = np.shape(trainx)[1]
+    (n,features) = np.shape(w)
     minmum = np.power(10,10)#add minimum may fail
     h = np.eye(n)
     c =1
-    m = 5
+    m = 10
     s = []
     y = []
-    g = gfun(trainx,trainy,w)
-    d = -h*g
     lamda = 0.1
     lr = 0.1
     t0 =np.power(10,4)
@@ -235,7 +242,8 @@ def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
     count = 0
     t=0
     batch_size = 1
-    ada = Adam(n)
+    ada = Adam(n,features)
+    showsize = int(samples/10)
     
     k = 0
     while k<maxiter:
@@ -246,7 +254,11 @@ def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
         for i in range(len(indexs)):
             if i%batch_size!=0 or i==0:
                 continue
-            g = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)    
+            g = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
+            if lasti==0:
+                d = -h*g
+                print(np.shape(d))
+            lastw = np.copy(w)
             templr = ada.getgrad(d,k+1)
             # w = w+t0/(t0+k)*lr*d
             w = w+templr/c
@@ -265,7 +277,7 @@ def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
             p = ts-2
             a = []
             while p>=0:
-                alpha = s[p].T*qk/(y[p].T*s[p])
+                alpha = s[p].T*qk/(y[p].T*s[p]+epsilo)
                 a.append(alpha)
                 qk = qk-y[p]*alpha
                 p-=1
@@ -280,17 +292,22 @@ def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
                 # h = h/(ts-1)   
             r = h*qk
             for p in range(ts-1):
-                beta = y[p].T*r/(y[p].T*s[p])
+                beta = y[p].T*r/(y[p].T*s[p]+epsilo)
                 r = r+s[p]*(c*a[ts-2-p]-beta)
-            if yk.T*sk>0:
-                d = d-r
-                
-            if i/batch_size%1000 == 0:
-                g = gfun(trainx,trainy,w)
-                t = np.linalg.norm(g)
+            if np.all(yk.T*sk>0):
+                d = d-r   
+            if i/batch_size%showsize == 0:
+                # g = gfun(trainx,trainy,w)
+                # t = np.linalg.norm(g)
+                # print(t)
+                # if t<0.02:
+                    # return w
+                tempdis = lastw-w
+                t = np.linalg.norm(tempdis)
                 print(t)
-                if t<0.02:
+                if t<1e-5:
                     return w
+
         k+=1
     return w   
 
