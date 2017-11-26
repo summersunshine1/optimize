@@ -4,8 +4,12 @@ pardir = getparentdir()
 from commonLib import *
 from adadelta import *
 
+import warnings
+warnings.filterwarnings("error")
+
 train_path = pardir+'/data/train'
 test_path = pardir+'/data/test'
+e = 1e-6
 
 def sigmoid(z): 
     return 1/(1+np.exp(-z))
@@ -16,25 +20,28 @@ def compute_regular_gradients(x,y,w):
     m = np.shape(x)[0]
     return alpha*x.T*(h-y)/m
 
-def get_pesudo_gradient(gfunc,x,y,w,lamda=1,isl1=1):
+def get_pesudo_gradient(gfunc,x,y,w,lamda=0.01,isl1=1):
     if not isl1:
         return gfunc(x,y,w)
     g = [[0]]*len(w)
     m = np.shape(x)[0]
-    lamda = lamda/m
+    # lamda = lamda/m
+    
     oldg = gfunc(x,y,w)
     for i in range(len(w)):
         v = oldg.item(i)
-        if v<0:
+        wi = w[i]
+        # print(str(v+lamda)+" "+str(wi))
+        if wi<0:
            g[i] = [v-lamda]
-        elif v>0:
+        elif wi>0:
             g[i] = [v+lamda]
         else:
             if v+lamda<0:
                 g[i]=[v+lamda]
             elif v-lamda>0:
                 g[i]=[v-lamda]
-            else:   
+            else:
                 g[i]=[0]
     g = np.matrix(g)
     return g
@@ -53,6 +60,14 @@ def get_orthant(w,psudo_g):
 
 def fix_sign(g,sign):
     res = np.multiply(g,sign)
+    # print(res[res<=0])
+    try:
+        a = (res<=0)
+    except RuntimeWarning:
+        print(res[res<=0])
+    if len(res[res<=0])==0:
+        # print(g)
+        return g
     g[res<=0]=0
     return g
 
@@ -92,36 +107,37 @@ def owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
             return w
         d = -hk*g
         d = fix_sign(d,-g)
-
         #line search 
         z = 0
+        orth = get_orthant(w,g)
         while z<20:
             new_w = w+be**z*d
-            orth = get_orthant(w,g)
-            new_w = fix_sign(new_w,orth)
-            
+
+            new_w = fix_sign(new_w,orth) 
             temp1 = func(trainy,trainx,new_w)
             temp2 = func(trainy,trainx,w)-delta*g.T*(new_w-w)
             if temp1<=temp2:
                 break
             z+=1 
-        w = np.copy(new_w)
         if len(s)>m:
             s.pop(0)
             y.pop(0)
             
         sk = new_w - w
+        w = np.copy(new_w)
         qk = gfun(trainx,trainy,w)
-
-        yk = qk-gk
-          
+        yk = qk-gk  
         s.append(sk)
         y.append(yk)
         t = len(s)
         i = t-2
         a = []
         while i>=0:
-            alpha = s[i].T*qk/(y[i].T*s[i])
+            try:
+                alpha = s[i].T*qk/(y[i].T*s[i])
+            except RuntimeWarning:
+                print(s[i])
+                print(y[i])
             a.append(alpha)
             qk = qk-y[i]*alpha
             i-=1
@@ -151,14 +167,15 @@ def online_owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
     y = []
     hk = np.eye(n)
     h = np.eye(n)
-    batch_size = 1
+    
+    batch_size = 10
     
     lamda = 0.1
     lr = 0.001
     t0 =np.power(10,4)
     samples = np.shape(trainx)[0]
     ada = Adam(n)
-    while k<5:
+    while k<10:
         print("current iter:" +str(k))
         indexs = list(range(samples))
         np.random.shuffle(indexs)
@@ -167,16 +184,20 @@ def online_owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
             if i%batch_size!=0 or i==0:
                 continue
             g = gpfun(gfun,trainx[lasti:i,:],trainy[lasti:i,:],w)
+            # print(g)
+            # return w
             gk = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
-            d = -hk*gk
-            templr = ada.getgrad(d,k+1)
+            d = -hk*g
+            # print(d)
             d = fix_sign(d,-g)
-
-            # new_w = w+(lr*t0/(t0+k))*d
+            
+            templr = ada.getmaxgrad(d,k+1)
             new_w = w+templr
+            # print(templr)
             orth = get_orthant(w,g)
             new_w = fix_sign(new_w,orth)
             sk = (new_w - w)
+            # new_w = w+sk
             w = np.copy(new_w)
             if len(s)>m:
                 s.pop(0)
@@ -190,8 +211,14 @@ def online_owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
             t = len(s)
             p = t-2
             a = []
+            # print(sk)
             while p>=0:
-                alpha = s[p].T*qk/(y[p].T*s[p])
+                try:
+                    alpha = s[p].T*qk/((y[p].T)*(s[p])+e)
+                except RuntimeWarning:
+                    print(s[s!=0])
+                    print(y[y!=0])
+                    # print("warning")
                 a.append(alpha)
                 qk = qk-y[p]*alpha
                 p-=1
@@ -202,8 +229,8 @@ def online_owl_qn(func,gfun,gpfun,hess,w,maxiter,trainx,trainy):
             # h = y[0]*s[0].T/(y[0].T*y[0])
             r = h*qk
             for p in range(t-1):
-                beta = y[p].T*r/(y[p].T*s[p])
-                r = r+s[p]*(a[t-2-p]-beta)
+                beta = y[p].T*r/(y[p].T*s[p]+e)
+                r = r+s[p]*(c*a[t-2-p]-beta)
             if yk.T*sk>0:
                 hk = r*g.I
                 
@@ -223,8 +250,10 @@ def initdata(path):
     label = np.matrix(np.array(label)).T
     train = np.matrix(np.array(train))
     (samples,features) = np.shape(train)
-    w = np.matrix(np.zeros((features+1,1)))
-    # w = np.matrix(np.random.randn(features+1,1))
+    w = np.matrix(np.ones((features+1,1)))
+    # w = np.matrix(np.random.randn(features+1,1))*0.01
+    # w =  np.random.normal(0, 1, features+1)
+    # w = np.matrix(w.reshape((features+1,1)))
     ones = np.ones((samples,1))
     train = np.hstack((ones,train))
     return train,label,w
@@ -242,7 +271,7 @@ def test(w):
     test,label,_ = initdata(test_path)
     h = test*w
     p = sigmoid(h)
-    print(p)
+    # print(p)
     print(acc(p,label))
     
 def train():
