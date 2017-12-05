@@ -13,6 +13,7 @@ import datetime
 e = 1e-6
 train_path = pardir+'/data/train.ffm'
 test_path = pardir+'/data/test.ffm'
+auc_path = pardir+'/res/auc'
 
 def sparse_feature_w_multiply(featuredic,w):
     wx = 0.0
@@ -26,7 +27,6 @@ def compute_regular_gradients(vecfeatures,labels,w):
     grad = np.matrix(np.zeros((nfeatures,1)))
     temp = sigmoid(np.array([[sparse_feature_w_multiply(vecfeatures[i],w)] for i in range(len(vecfeatures))]))
     temp -= labels
-    # temp = func(vecfeatures,w,labels)
     for i in range(len(vecfeatures)):
         for k,v in vecfeatures[i].items():
             grad[k,:]+=temp[i]*v
@@ -38,10 +38,6 @@ def compute_regular_gradients(vecfeatures,labels,w):
 def print_consume_time(begin, end, process,isprint=0):
     if isprint:
         print("..."+process+"..."+str((end-begin)))
-        
-def computeloss(y,x,w):
-    h = sigmoid(x*w)
-    return -(np.dot(y.T,np.log(h))+np.dot((1-y).T,np.log(1-h)))
     
 def online_lbfgs(func,gfun,w,maxiter,vecfeatures,labels):
     n = len(w)
@@ -123,8 +119,8 @@ def online_lbfgs(func,gfun,w,maxiter,vecfeatures,labels):
             # g = gfun(vecfeatures,labels,w)/len(vecfeatures)
             # t = np.linalg.norm(g)
             # print("current grad:"+str(t))
-            if i/batch_size%10==0:
-                test(w)
+            # if i/batch_size%10==0:
+            test(w)
             # if t<0.02:
                 # return w
         k+=1
@@ -162,7 +158,6 @@ def initdata(path):
     np.random.seed(1)
     # w = np.matrix(np.zeros((maxfeature+1,1)))
     w = np.matrix(np.random.randn(maxfeature+1,1))
-    print(w)
     end = time.time()
     print_consume_time(begin,end,"init data "+path)
     return features,labels,w
@@ -177,29 +172,32 @@ def acc(p,label):
     return len(p[p==label])/len(p)
     
 def predict(features,w):
-    res = []
-    for featuredic in features:
-        wx = sparse_feature_w_multiply(featuredic,w)
-        res.append(wx)
-    res = np.array(res)
-    p = sigmoid(res)
-    return p
+    res = sigmoid(np.array([[sparse_feature_w_multiply(features[i],w)] for i in range(len(features))]))
+    return res
   
 test_features = 0
 test_labels = 0
+
+def computeloss(p,labels):
+    return -(np.dot(labels.T,np.log(p))+np.dot((1-labels).T,np.log(1-p)))/np.shape(labels)[0]
  
 def test(w):
     begin = time.time()
     p = predict(test_features,w)
+    loss = computeloss(p,test_labels)
     end = time.time()
-    print_consume_time(begin,end,"test")
-    print("acc"+str(acc(p,test_labels))+" auc:"+str(cal_auc(p, test_labels)))
+    print_consume_time(begin,end,"test") 
+    lines = "acc:"+str(acc(p,test_labels))+" auc:"+str(cal_auc(p, test_labels))+" loss:"+str(loss.A1[0])+'\n'
+    print(lines)
+    write_middle_res(lines,auc_path)
     
 def train():
     # train,label,w = initdata(train_path)
     # maxiter = 10
     # w = lbfgs(computeloss,compute_regular_gradients,hessian,w,maxiter,train,label)
     # test(w)
+    if os.path.exists(auc_path):
+        os.remove(auc_path)
     features,label,w = initdata(train_path)
     global test_features,test_labels
     test_features,test_labels,_ = initdata(test_path)

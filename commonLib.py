@@ -219,6 +219,11 @@ def cal_auc(predicted_ctr, labels):
     
 def sigmoid(z): 
     return 1/(1+np.exp(-z))
+    
+def write_middle_res(line,path):
+    with open(path,'a',encoding='utf-8') as f:
+        f.writelines(line)
+    
 
 if __name__=="__main__":
     # a = [1,1,3,4,5]
