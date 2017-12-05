@@ -192,6 +192,33 @@ def get_fix_date(dates):
         else:
             b_index.append(i)
     return a_index,b_index
+    
+def cal_auc(predicted_ctr, labels):
+    i_sorted = sorted(range(len(predicted_ctr)),key=lambda i: predicted_ctr[i],reverse=True)
+    tp = 0
+    fp = 0
+    last_tp = 0
+    last_fp = 0
+    lastscore = predicted_ctr[i_sorted[0]]+1
+    x = []
+    y = []
+    auctemp = 0
+    for i in range(len(predicted_ctr)):
+        # if lastscore!=predicted_ctr[i_sorted[i]]:
+        auctemp += (fp-last_fp)*(tp+last_tp)/2
+        last_tp = tp
+        last_fp = fp
+        lastscore = predicted_ctr[i_sorted[i]]
+        if labels[i_sorted[i]]==1:
+            tp+=1
+        else:
+            fp+=1
+    auctemp+=(fp-last_fp)*(tp+last_tp)/2
+    auctemp = auctemp/(fp*tp)
+    return auctemp
+    
+def sigmoid(z): 
+    return 1/(1+np.exp(-z))
 
 if __name__=="__main__":
     # a = [1,1,3,4,5]

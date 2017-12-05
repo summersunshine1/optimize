@@ -8,13 +8,9 @@ from commonLib import *
 from adadelta import *
 from sklearn.datasets import make_classification
 import time
-from bfgs import *
-
+e = 1e-6
 train_path = pardir+'/data/train'
 test_path = pardir+'/data/test'
-
-def sigmoid(z): 
-    return 1/(1+np.exp(-z))
 
 def compute_regular_gradients(x,y,w,lamda=1,isl1=0):
     alpha = 1
@@ -182,7 +178,6 @@ def onlinebfgs(func,gfun,hess,w,maxiter,trainx,trainy):
     t=1000
     ada = Adam(n)
     count = 0
-    showsize = int(samples/10)
     while k<maxiter:
         indexs = list(range(samples))
         np.random.shuffle(indexs)
@@ -196,7 +191,6 @@ def onlinebfgs(func,gfun,hess,w,maxiter,trainx,trainy):
             tempg = ada.getgrad(d,k+1)
             # w = w+t0/(t0+k)*lr/c*d
             # s = t0/(t0+k)*lr/c*d
-            lastw = np.copy(w)
             w = w+tempg/c
             s = tempg/c
             y = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)-g+lamda*s
@@ -210,40 +204,35 @@ def onlinebfgs(func,gfun,hess,w,maxiter,trainx,trainy):
             else:
                 print('less')
             lasti=i
-            if i/batch_size%showsize == 0:
-                # g = gfun(trainx,trainy,w)
-                # t = np.linalg.norm(g)
-                # print(t)
-                # if t<0.02:
-                    # return w
-                tempdis = lastw-w
-                t = np.linalg.norm(tempdis)
+            if i/batch_size%1000 == 0:
+                g = gfun(trainx,trainy,w)
+                t = np.linalg.norm(g)
                 print(t)
-                if t<1e-5:
+                if t<0.02:
                     return w
         k+=1
     return w
     
 def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
-    epsilo = 1e-8
-    # n = np.shape(trainx)[1]
-    (n,features) = np.shape(w)
+    epsilo = 1e-4
+    n = np.shape(trainx)[1]
     minmum = np.power(10,10)#add minimum may fail
     h = np.eye(n)
     c =1
     m = 10
     s = []
     y = []
+    # g = gfun(trainx,trainy,w)
+    # d = -h*g
     lamda = 0.1
-    lr = 0.1
+    lr = 0.01
     t0 =np.power(10,4)
     
     samples = np.shape(trainx)[0]
     count = 0
     t=0
     batch_size = 1
-    ada = Adam(n,features)
-    showsize = int(samples/10)
+    ada = Adam(n)
     
     k = 0
     while k<maxiter:
@@ -251,15 +240,14 @@ def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
         indexs = list(range(samples))
         np.random.shuffle(indexs)
         lasti=0
-        for i in range(len(indexs)):
+        for i in range(len(indexs)-1):
             if i%batch_size!=0 or i==0:
                 continue
-            g = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w)
+            g = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w) 
             if lasti==0:
                 d = -h*g
-                print(np.shape(d))
-            lastw = np.copy(w)
             templr = ada.getgrad(d,k+1)
+            # templr = t0/(t0+k)*lr*d
             # w = w+t0/(t0+k)*lr*d
             w = w+templr/c
 
@@ -277,7 +265,7 @@ def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
             p = ts-2
             a = []
             while p>=0:
-                alpha = s[p].T*qk/(y[p].T*s[p]+epsilo)
+                alpha = s[p].T*qk/(y[p].T*s[p]+e)
                 a.append(alpha)
                 qk = qk-y[p]*alpha
                 p-=1
@@ -292,22 +280,18 @@ def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
                 # h = h/(ts-1)   
             r = h*qk
             for p in range(ts-1):
-                beta = y[p].T*r/(y[p].T*s[p]+epsilo)
+                beta = y[p].T*r/(y[p].T*s[p]+e)
                 r = r+s[p]*(c*a[ts-2-p]-beta)
-            if np.all(yk.T*sk>0):
-                d = d-r   
-            if i/batch_size%showsize == 0:
-                # g = gfun(trainx,trainy,w)
-                # t = np.linalg.norm(g)
-                # print(t)
-                # if t<0.02:
-                    # return w
-                tempdis = lastw-w
-                t = np.linalg.norm(tempdis)
+            if yk.T*sk>0:
+                d = d-r
+                
+            if i/batch_size%1000 == 0:
+                g = gfun(trainx,trainy,w)
+                t = np.linalg.norm(g)
                 print(t)
-                if t<1e-5:
+                test(w)
+                if t<0.02:
                     return w
-
         k+=1
     return w   
 
@@ -336,21 +320,24 @@ def acc(p,label):
     label = np.squeeze(label)
     return len(p[p==label])/len(p)
     
+    
+    
 def test(w):
     test,label,_ = initdata(test_path)
     h = test*w
     p = sigmoid(h)
-    print(acc(p,label))
+    print("acc"+str(acc(p,label))+" auc:"+str(cal_auc(p, label)))
     
 def train():
-    train,label,w = initdata(train_path)
-    maxiter = 10
-    w = lbfgs(computeloss,compute_regular_gradients,hessian,w,maxiter,train,label)
-    test(w)
+    # train,label,w = initdata(train_path)
+    # maxiter = 10
+    # w = lbfgs(computeloss,compute_regular_gradients,hessian,w,maxiter,train,label)
+    # test(w)
     train,label,w = initdata(train_path)
     maxiter = 10
     w = online_lbfgs(computeloss,compute_regular_gradients,hessian,w,maxiter,train,label)
     test(w)
+
     
     
 if __name__=="__main__":
