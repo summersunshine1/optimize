@@ -10,6 +10,7 @@ from commonLib import *
 from adadelta import *
 from sklearn import datasets
 from sklearn import preprocessing
+from sklearn import metrics
 
 train_path = pardir+'/data/train'
 test_path = pardir+'/data/test'
@@ -162,6 +163,10 @@ def test(w,useStandard=0):
     h = xtest*w
     p = sigmoid(h)
     print(acc(p,y_test))
+    # fpr, tpr, thresholds = metrics.roc_curve(y_test.A1, p, pos_label=1)
+    # print(metrics.auc(fpr, tpr))
+    cal_auc(p, y_test.A1)
+    
     
 def total():
     w = train()
@@ -190,9 +195,12 @@ def train_logistic():
     # print(train)
     train,label,w= initdata(train_path)
     # print(train)
-    lr = linear_model.LogisticRegression(verbose=1)
+    lr = linear_model.LogisticRegression(verbose=0)
     lr.fit(train,label)
+    xtest,y_test,_ = initdata(test_path)
     p = lr.predict(xtest)
+    fpr, tpr, thresholds = metrics.roc_curve(y_test.A1, p, pos_label=1)
+    print(metrics.auc(fpr, tpr))
     print(len(p[p==y_test.A1])/len(p))
 
 if __name__=="__main__":
