@@ -19,6 +19,8 @@ def read_data(path):
                 continue
             for a in arr:
                 barr = a.split(':')
+                if len(barr)<2:
+                    continue
                 temp = float(barr[1])
                 if math.isnan(temp):
                     continue
@@ -36,11 +38,11 @@ def plot_data():
         name = os.path.basename(file)
         acc,auc,loss = read_data(file)
         # plt.title(name)
-        # plt.plot(acc,label='acc')
-        # plt.plot(auc,label=name+' auc')
+        plt.plot(acc,label='acc')
+        plt.plot(auc,label=name+' auc')
         plt.plot(loss,label=name+' loss')
-    plt.legend()
-    plt.show()
+        plt.legend()
+        plt.show()
         
 if __name__=="__main__":
     plot_data()

@@ -58,6 +58,7 @@ def start_thread(thread):
     
 def cal_auc(predicted_ctr, labels):
     i_sorted = sorted(range(len(predicted_ctr)),key=lambda i: predicted_ctr[i],reverse=True)
+    # print(predicted_ctr[i_sorted[:10]])
     tp = 0
     fp = 0
     last_tp = 0
@@ -67,11 +68,11 @@ def cal_auc(predicted_ctr, labels):
     y = []
     auctemp = 0
     for i in range(len(predicted_ctr)):
-        # if lastscore!=predicted_ctr[i_sorted[i]]:
-        auctemp += (fp-last_fp)*(tp+last_tp)/2
-        last_tp = tp
-        last_fp = fp
-        lastscore = predicted_ctr[i_sorted[i]]
+        if lastscore!=predicted_ctr[i_sorted[i]]:
+            auctemp += (fp-last_fp)*(tp+last_tp)/2
+            last_tp = tp
+            last_fp = fp
+            lastscore = predicted_ctr[i_sorted[i]]
         if labels[i_sorted[i]]==1:
             tp+=1
         else:

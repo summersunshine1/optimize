@@ -13,11 +13,13 @@ from getPath import *
 pardir = getparentdir()
 from commonLib import *
 from commonmethod import *
+from convertmethod import *
 
 train_path = pardir+'/data/train.ffm'
 test_path = pardir+'/data/test.ffm'
-auc_path = pardir+'/res/auc_sgd_100'
+auc_path = pardir+'/res/auc_sgd_l2'
 e=1e-6
+
 
 def steepest(w,vecfeatures,labels):
     maxiters = 500
@@ -46,15 +48,20 @@ def sgd(w,vecfeatures,labels):
                 test(w)
     
 def sgd_with_ada(w,vecfeatures,labels):
+    if os.path.exists('resp'):
+        os.remove('resp')
     maxiters = 10
-    alpha = 1
     samples = len(labels)
     featurenum = np.shape(w)[0]
-    ada = Adam(featurenum)
+    ada = Adam(featurenum,alpha=0.01)
     batch_size = 100
     one_size = samples/batch_size
     for k in range(maxiters):
-        vecfeatures,labels = shufflesamples(vecfeatures,labels)
+        # before = np.copy(vecfeatures)
+        # vecfeatures,labels = shufflesamples(vecfeatures,labels)
+        # after = np.copy(vecfeatures)
+        # print(before)
+        # print(after)
         lasti = 0
         lines = "iter"+str(k)+'\n'
         print(lines)
@@ -64,14 +71,24 @@ def sgd_with_ada(w,vecfeatures,labels):
             if i%batch_size!=0 or i==0:
                 continue 
             c_batch = i/batch_size
-            g = compute_regular_gradients(vecfeatures[lasti:i],labels[lasti:i,:],w)
-            templr = ada.getgrad(g,iter+c_batch)
-            w = w-templr
+            begin = time.time()
+            if not isneg:
+                g = compute_regular_gradients(vecfeatures[lasti:i],labels[lasti:i,:],w,isl2=0)
+            else:
+                g = compute_gradients(vecfeatures[lasti:i],labels[lasti:i,:],w,isl2=0)
+            end = time.time()
+            print_consume_time(begin,end,"compute_gradients...",isprint=0) 
+            templr = ada.getgrad(g,c_batch)
+            # w = w-0.001*g
+            w -= templr
+            # print(g)
+            tempw = g[g!=0]
+            line = " ".join(str(x) for x in tempw.A1)+'\n'
+            write_middle_res(line,'resp')
             lasti = i
-            if i/batch_size%10==0:
-                test(w,train_features,train_labels,1)
-                test(w,test_features,test_labels,0)
-                
+            if c_batch%10==0:
+                # test(w,train_features,train_labels,1)
+                test(w,test_features,test_labels,auc_path,0)   
 
 test_features = 0
 test_labels = 0 
@@ -87,21 +104,6 @@ def train():
     test_features,test_labels,_ = initdata(test_path)
     # sgd_with_ada(w,features,label)
     sgd_with_ada(w,train_features,train_labels)
- 
-def test(w,features,labels,istrain=0):
-    begin = time.time()
-    p = predict(features,w)
-    end = time.time()
-    print_consume_time(begin,end,"predict") 
-    loss = computeloss(p,labels)
-    end1 = time.time()
-    print_consume_time(end,end1,"computeloss") 
-    if istrain:
-        lines = "train acc:"+str(acc(p,labels))+" auc:"+str(cal_auc(p, labels))+" loss:"+str(loss.A1[0])+'\n'
-    else:
-        lines = "test acc:"+str(acc(p,labels))+" auc:"+str(cal_auc(p, labels))+" loss:"+str(loss.A1[0])+'\n'
-    print(lines)
-    write_middle_res(lines,auc_path)
     
 
 if __name__=="__main__":
