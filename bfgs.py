@@ -28,6 +28,15 @@ def compute_regular_gradients(x,y,w,lamda=1,isl1=0):
         return (alpha*(x.T*(h-y))+lamda*w)/m
     elif isl1==3:
         return alpha*(x.T*(h-y)+lamda*w+lamda*np.sign(w))/m
+        
+def sigmoid(z): 
+    # z[z>50] = 50
+    # z[z<-50] = -50
+    # z = np.clip(z, -50, 50)
+    # double ex = pow(2.718281828, fres);
+    # return ex / (1.0 + ex);
+    temp = np.power(2.71828,z)
+    return temp*1.0/(1+temp)
     
 def hessian(x,w,lamda =1,isl1=0):
     m = np.shape(x)[0]
@@ -101,18 +110,16 @@ def lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
     be = 0.4
     epsilo = 1e-4
     n = np.shape(trainx)[1]
-    h = np.eye(n)
    
     k = 0
     m = 10
     s = []
     y = []
     g = gfun(trainx,trainy,w)
-    d = -h*g
-    while k<15:
+    d = -g
+    while k<100:
         g = gfun(trainx,trainy,w)
         t = np.linalg.norm(g)
-        print(t)
         if t<=epsilo:
             print("last"+str(t))
             return w
@@ -123,7 +130,6 @@ def lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
             if temp1<=temp2:
                 break
             z+=1 
-        print(z)
         w = w+be**z*d
         
         if len(s)>m:
@@ -142,29 +148,31 @@ def lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
             # gamma = (s[t-2].T*y[t-2])/(y[t-2].T*y[t-2])
 
         # qk = qk*gamma
-        i = t-2
+        i = t-1
         a = []
         while i>=0:
             alpha = s[i].T*qk/(y[i].T*s[i])
             a.append(alpha)
             qk = qk-y[i]*alpha
             i-=1
-        # if t>=2:
-            # h = y[t-1]*s[t-1].T/(y[t-1].T*y[t-1])
+        if t>=1:
+            qk*=s[0].T*y[0]/(y[0].T*y[0])
             # temp = list(temp.A1)
             # h = np.diag(temp*n)
-        r = h*qk
-        for i in range(t-1):
-            beta = y[i].T*r/(y[i].T*s[i])
-            r = r+s[i]*(a[t-2-i]-beta)
+        # r = h*qk
+        for i in range(t):
+            beta = y[i].T*qk/(y[i].T*s[i])
+            qk += s[i]*(a[t-1-i]-beta)
         if yk.T*sk>0:
-            d = d-r
+            d =-qk
         k+=1
+        if k%10==0:
+            test(w)
     return w
     
 def onlinebfgs(func,gfun,hess,w,maxiter,trainx,trainy):
     epsilo = 1e-4
-    minmum = np.power(10,10)
+    minmum = 1/np.power(10,10)
     n = np.shape(trainx)[1]
     
     samples = np.shape(trainx)[0]
@@ -224,15 +232,15 @@ def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
     y = []
     # g = gfun(trainx,trainy,w)
     # d = -h*g
-    lamda = 0.1
+    lamda = 3
     lr = 0.01
     t0 =np.power(10,4)
     
     samples = np.shape(trainx)[0]
     count = 0
     t=0
-    batch_size = 1
-    ada = Adam(n)
+    batch_size = 10
+    ada = Adam(n,alpha=0.1)
     
     k = 0
     while k<maxiter:
@@ -246,9 +254,19 @@ def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
             g = gfun(trainx[lasti:i,:],trainy[lasti:i,:],w) 
             if lasti==0:
                 d = -h*g
+            # temp = np.dot(g.T,d)
             templr = ada.getgrad(d,k+1)
             # templr = t0/(t0+k)*lr*d
+            # if (np.sum(templr)>=0 and temp>=0):
+                # print("error")
+            # elif np.sum(templr)>=0 and temp<0:
+                # print("adaerror")
+          
+            # if np.sum(templr)>=0:
+                # print("error")
+           
             # w = w+t0/(t0+k)*lr*d
+            oldw = np.copy(w)
             w = w+templr/c
 
             if len(s)>m:
@@ -262,36 +280,28 @@ def online_lbfgs(func,gfun,hess,w,maxiter,trainx,trainy):
             s.append(sk)
             y.append(yk)
             ts = len(s)
-            p = ts-2
+            p = ts-1
             a = []
             while p>=0:
-                alpha = s[p].T*qk/(y[p].T*s[p]+e)
+                alpha = s[p].T*qk/(y[p].T*s[p])
                 a.append(alpha)
-                qk = qk-y[p]*alpha
+                qk -= y[p]*alpha
                 p-=1
-            temp = ts
-            # if temp>=2:#do that will influence convergence 
-                # while temp>=1:
-                    # if temp==t:
-                        # h = y[temp-1]*s[temp-1].T/(y[temp-1].T*y[temp-1])
-                    # else:
-                        # h+= y[temp-1]*s[temp-1].T/(y[temp-1].T*y[temp-1])
-                    # temp-=1
-                # h = h/(ts-1)   
-            r = h*qk
-            for p in range(ts-1):
-                beta = y[p].T*r/(y[p].T*s[p]+e)
-                r = r+s[p]*(c*a[ts-2-p]-beta)
+            if t>=1:
+                # qk*=s[0].T*y[0]/(y[0].T*y[0])
+                qk*=s[-1].T*y[-1]/(y[-1].T*y[-1])
+                # temp = list(temp.A1)
+                # h = np.diag(temp*n)
+            # r = h*qk
+            for p in range(ts):
+                beta = y[p].T*qk/(y[p].T*s[p])
+                qk += s[p]*(a[t-1-p]-beta)
             if yk.T*sk>0:
-                d = d-r
+                d =-qk
                 
-            if i/batch_size%1000 == 0:
-                g = gfun(trainx,trainy,w)
-                t = np.linalg.norm(g)
-                print(t)
+            if i/batch_size%100 == 0:
                 test(w)
-                if t<0.02:
-                    return w
+                get_updates(oldw,templr)
         k+=1
     return w   
 
@@ -326,7 +336,8 @@ def test(w):
     test,label,_ = initdata(test_path)
     h = test*w
     p = sigmoid(h)
-    print("acc"+str(acc(p,label))+" auc:"+str(cal_auc(p, label)))
+    l = computeloss(label,test,w)/len(label)
+    print("loss "+str(l)+" auc "+str(auc(p, label)))
     
 def train():
     # train,label,w = initdata(train_path)
@@ -335,9 +346,14 @@ def train():
     # test(w)
     train,label,w = initdata(train_path)
     maxiter = 10
+    # w = lbfgs(computeloss,compute_regular_gradients,hessian,w,maxiter,train,label)
     w = online_lbfgs(computeloss,compute_regular_gradients,hessian,w,maxiter,train,label)
     test(w)
-
+    
+def get_updates(w,update):
+    a = np.linalg.norm(w)
+    update_value = np.linalg.norm(update)
+    print(update_value/a)
     
     
 if __name__=="__main__":

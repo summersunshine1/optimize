@@ -54,19 +54,12 @@ def sgd_with_ada(w,vecfeatures,labels):
     samples = len(labels)
     featurenum = np.shape(w)[0]
     ada = Adam(featurenum,alpha=0.01)
-    batch_size = 100
+    batch_size = 10
     one_size = samples/batch_size
     for k in range(maxiters):
-        # before = np.copy(vecfeatures)
-        # vecfeatures,labels = shufflesamples(vecfeatures,labels)
-        # after = np.copy(vecfeatures)
-        # print(before)
-        # print(after)
         lasti = 0
-        lines = "iter"+str(k)+'\n'
-        print(lines)
-        write_middle_res(lines,auc_path)
         iter = k*one_size
+        vecfeatures,labels = shufflesamples(vecfeatures,labels)
         for i in range(samples):
             if i%batch_size!=0 or i==0:
                 continue 
@@ -83,8 +76,8 @@ def sgd_with_ada(w,vecfeatures,labels):
             w -= templr
             # print(g)
             tempw = g[g!=0]
-            line = " ".join(str(x) for x in tempw.A1)+'\n'
-            write_middle_res(line,'resp')
+            # line = " ".join(str(x) for x in tempw.A1)+'\n'
+            # write_middle_res(line,'resp')
             lasti = i
             if c_batch%10==0:
                 # test(w,train_features,train_labels,1)

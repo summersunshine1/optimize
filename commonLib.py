@@ -84,9 +84,7 @@ def cal_auc(predicted_ctr, labels):
 def auc(pred,labels):
     fpr, tpr, thresholds = metrics.roc_curve(labels, pred, pos_label=1)
     return metrics.auc(fpr, tpr)
-    
-
-    
+ 
 def write_middle_res(line,path):
     with open(path,'a',encoding='utf-8') as f:
         f.writelines(line)

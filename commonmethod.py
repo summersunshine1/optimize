@@ -97,17 +97,15 @@ def initdata(path):
     features,labels = read_ffm(path)
     maxfeature = get_biggest_dim(features)
     minfeature = get_minimum(features)
-    print(maxfeature)
     np.random.seed(1)
     # features = np.array([update_dic(featuredic,maxfeature) for featuredic in features])
-    w = np.matrix(np.zeros((maxfeature+1,1)))
+    w = np.matrix(np.zeros((maxfeature+1,1)))*1.0
     # w = np.matrix(np.random.randint(2,size = (maxfeature+2,1)))
-    # w = np.matrix(np.random.uniform(0,1,size = (maxfeature+2,1)))
+    # w = np.matrix(np.random.uniform(-1,1,size = (maxfeature+2,1)))
     # print(w)
     # w = np.matrix(np.random.randn(maxfeature+2,1))
     # w = np.zeros((maxfeature+2,1))
     # w = np.matrix([[0] if i%2 else [1] for i in range(maxfeature+2)])
-    
     end = time.time()
     print_consume_time(begin,end,"init data "+path)
     return features,labels,w
@@ -130,13 +128,16 @@ def predict(features,w):
     res = sigmoid(res)
     return res
     
-def computeloss(pa,labels,w,isl2=0):
+def computeloss(pa,labels,w,isl1=0,l1co=1,isl2=0,l2co=1):
     eps = 1e-15
     p = np.copy(pa)
-    # p = np.clip(p, eps, 1 - eps)
-    if not isl2:
-        return -(np.dot(labels.T,np.log(p))+np.dot((1-labels).T,np.log(1-p)))/np.shape(labels)[0]
-    return -(np.dot(labels.T,np.log(p))+np.dot((1-labels).T,np.log(1-p))+0.5*l2co*w.T*w)/np.shape(labels)[0] 
+    p = np.clip(p, eps, 1 - eps)
+    if isl2:
+        return (-(np.dot(labels.T,np.log(p))+np.dot((1-labels).T,np.log(1-p)))+l2co*w.T*w)/np.shape(labels)[0] 
+    if isl1:
+        return (-(np.dot(labels.T,np.log(p))+np.dot((1-labels).T,np.log(1-p)))+l1co*np.sum(np.abs(w)))/np.shape(labels)[0] 
+    return -(np.dot(labels.T,np.log(p))+np.dot((1-labels).T,np.log(1-p)))/np.shape(labels)[0]
+        
         
     
 def computeloss_lib(p,labels):
@@ -152,7 +153,7 @@ def sigmoid(z):
     return temp*1.0/(1+temp)
     
 def comp_loss_with_features(features,labels,w):
-    return computeloss(predict(features,w),labels)
+    return computeloss(predict(features,w),labels,w)
     
 def shufflesamples(vecfeatures,labels):
     indexs = list(range(len(labels)))
@@ -160,7 +161,7 @@ def shufflesamples(vecfeatures,labels):
     np.random.shuffle(indexs)
     return vecfeatures[indexs],labels[indexs]
     
-def lbfgs_two_recursion(s,y,newg,d):
+def lbfgs_two_recursion(s,y,newg,d,c=1):
     a = []
     ts = len(s)
     p = ts-1
@@ -168,38 +169,44 @@ def lbfgs_two_recursion(s,y,newg,d):
     while p>=0:
         alpha = s[p].T*newg/(y[p].T*s[p]+e)
         a.append(alpha)
-        newg = newg-y[p]*alpha
+        newg -= y[p]*alpha
         p-=1
-    if ts>=2:
-        temp = ts-2
-        # newg *= s[0].T*y[0]/(y[0].T*y[0])
-        newg *= s[temp].T*y[temp]/(y[temp].T*y[temp])
+    if ts>0:
+        # temp = ts-2
+        # newg *= s[0].T*y[0]/(y[0].T*y[0]+e)
+        newg*=s[-1].T*y[-1]/(y[-1].T*y[-1]+e)
+        # newg *= s[temp].T*y[temp]/(y[temp].T*y[temp])
         # g *= s[t].T*y[t]/(y[t].T*y[t])
     for p in range(ts):
         beta = y[p].T*newg/(y[p].T*s[p]+e)
-        newg += s[p]*(a[ts-1-p]-beta)
+        newg += s[p]*(c*a[ts-1-p]-beta)
     if y[-1].T*s[-1]>0:
-        d -= newg
+        d = -newg
+    else:
+        print("lesszero")
     return d
 
-def test(w,features,labels,auc_path,istrain=0):
+def test(w,features,labels,auc_path,isl1=0,istrain=0):
     begin = time.time()
     p = predict(features,w)
     # print(p[:10])
     end = time.time()
     print_consume_time(begin,end,"predict",isprint=0)
-    # if not isneg:
-        # loss = computeloss(p,labels,w,0)
-    # else:
-        # loss = cost(features, labels, w,0)
-    # end1 = time.time()
-    # print_consume_time(end,end1,"computeloss",isprint=0) 
+    loss = computeloss(p,labels,w,isl1=isl1)
+    end1 = time.time()
+    print_consume_time(end,end1,"computeloss",isprint=0) 
     if istrain:
         lines = "train acc:"+str(acc(p,labels))+" auc:"+str(cal_auc(p, labels))+" loss:"+str(loss.A1[0])+'\n'
     else:
-        lines = "test acc:"+str(acc(p,labels))+" auc:"+str(cal_auc(p, labels))+'\n'#" loss:"+str(loss.A1[0])+'\n'
-    print(lines)
-    write_middle_res(lines,auc_path)
+        lines = "test acc:"+str(acc(p,labels))+" auc:"+str(cal_auc(p, labels))+" loss:"+str(loss.A1[0])+'\n'
+        print(lines)
+        write_middle_res(lines,auc_path)
+    
+def get_updates(w,update):
+    a = np.linalg.norm(w)
+    update_value = np.linalg.norm(update)
+    print(update_value/a)
+    
     
 if __name__=="__main__":
     # features,labels,w = initdata(test_method_path)
