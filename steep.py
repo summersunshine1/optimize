@@ -148,7 +148,8 @@ def train():
     w = sgd_with_ada(train,label,w,0)
     return w
     
-def acc(p,label):
+def acc(pa,label):
+    p = np.copy(pa)
     p[p>0.5]=1
     p[p<0.5]=0
     p = np.array(p)
@@ -162,7 +163,7 @@ def test(w,useStandard=0):
         xtest,y_test,_ = initdata(test_path)
     h = xtest*w
     p = sigmoid(h)
-    print(acc(p,y_test))
+    # print(acc(p,y_test))
     # fpr, tpr, thresholds = metrics.roc_curve(y_test.A1, p, pos_label=1)
     # print(metrics.auc(fpr, tpr))
     cal_auc(p, y_test.A1)
