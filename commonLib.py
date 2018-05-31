@@ -81,6 +81,24 @@ def cal_auc(predicted_ctr, labels):
     auctemp = auctemp/(fp*tp)
     return auctemp
     
+def calauc1(predicted_ctr, labels):
+    c = 0
+    tp = 0
+    fp = 0
+    posptr = predicted_ctr[labels==1]
+    negptr = predicted_ctr[labels==0]
+    poslabels = labels[labels==1]
+    neglabels = labels[labels==0]
+   
+    for i in range(len(poslabels)):
+        for j in range(len(neglabels)):
+            if posptr[i]>negptr[j]:
+                c += 1
+            if posptr[i] == negptr[j]:
+                c += 0.5
+    return c/(len(posptr)+len(negptr))
+
+
 def auc(pred,labels):
     fpr, tpr, thresholds = metrics.roc_curve(labels, pred, pos_label=1)
     return metrics.auc(fpr, tpr)
@@ -92,6 +110,11 @@ def write_middle_res(line,path):
 def get_array_from_dic(dict,type):
     values = np.fromiter(iter(dicvalue), dtype=type)
     return values
+    
+def rightrotate():
+    n.left = m.right 
+    m.right = n
+    
 
 if __name__=="__main__":
     a = [1,1,3,4,5]
